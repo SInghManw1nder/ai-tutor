@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Coding & Business Tutor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- CodeMirror CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/theme/material-darker.min.css">
+
+    <!-- Pyodide -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #09f;
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .prose-custom { color: #374151; }
+        .prose-custom p, .prose-custom ul, .prose-custom ol { margin-bottom: 1rem; }
+        .prose-custom h3 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem; margin-top: 1.5rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.25rem; }
+        .prose-custom strong { font-weight: 600; }
+        .prose-custom code { background-color: #e5e7eb; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-family: monospace; }
+        .prose-custom pre { background-color: #f3f4f6; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; position: relative; }
+        .prose-custom pre code { background-color: transparent; padding: 0; }
+        #python-output-console {
+            background-color: #1a1a1a;
+            color: #d4d4d4;
+            font-family: monospace;
+            padding: 1rem;
+            border-radius: 0.375rem;
+            margin-top: 1rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        #python-output-console.error {
+            color: #f87171; /* red-400 */
+        }
+        .CodeMirror {
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            height: auto;
+            min-height: 200px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen py-8">
+    <div class="w-full max-w-4xl mx-auto p-2 sm:p-4 md:p-8">
+        <div class="bg-white rounded-xl shadow-lg p-6 md:p-8">
+            <header class="text-center mb-6 relative">
+                <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">AI Coding & Business Tutor</h1>
+                <p class="text-gray-500 mt-2">Practice with AI-powered feedback.</p>
+                <div id="pyodide-status" class="text-xs text-blue-500 mt-2 hidden"></div>
+            </header>
+            
+            <div id="apiKeySection" class="mb-6">
+                <label for="apiKey" class="block text-sm font-medium text-gray-700 mb-1">Your Google AI Studio API Key</label>
+                <div class="flex items-center space-x-2">
+                    <input type="password" id="apiKey" class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" placeholder="Enter your API key here">
+                    <button id="saveApiKey" class="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 whitespace-nowrap">Set Key</button>
+                </div>
+                <div id="apiKeyStatus" class="text-xs text-gray-500 mt-2">Your key is stored only in your browser for this session.</div>
+                <details class="mt-3 text-sm">
+                    <summary class="cursor-pointer text-indigo-600 hover:underline">How to get an API key?</summary>
+                    <div class="mt-2 p-3 bg-gray-50 rounded-md border text-xs text-gray-600">
+                        <ol class="list-decimal list-inside space-y-1">
+                            <li>Go to <a href="https://aistudio.google.com/" target="_blank" class="text-indigo-600 underline">Google AI Studio</a>.</li>
+                            <li>Click <strong>"Get API key"</strong> and then <strong>"Create API key in new project"</strong>.</li>
+                            <li>Copy the key and paste it above.</li>
+                        </ol>
+                    </div>
+                </details>
+            </div>
+
+            <main id="mainContent" class="hidden">
+                <!-- Domain Selection -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">1. Select a Domain</label>
+                    <div class="flex flex-col sm:flex-row justify-center items-center gap-4">
+                        <button id="pythonBtn" onclick="selectLanguage('Python')" class="w-full sm:w-auto px-6 py-2 border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">Python</button>
+                        <button id="sqlBtn" onclick="selectLanguage('SQL')" class="w-full sm:w-auto px-6 py-2 border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700">SQL</button>
+                        <button id="bizdevBtn" onclick="selectLanguage('Business Development')" class="w-full sm:w-auto px-6 py-2 border-transparent text-base font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700">Business</button>
+                    </div>
+                </div>
+
+                <!-- Options -->
+                <div id="optionsSection" class="hidden bg-gray-50 p-4 rounded-lg border mb-6 space-y-4">
+                     <p class="text-sm font-medium text-gray-700 -mb-2">2. Choose Options</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="difficulty" class="block text-sm font-medium text-gray-700">Difficulty</label>
+                            <select id="difficulty" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 rounded-md">
+                                <option value="" disabled selected>Select Difficulty</option>
+                                <option>Easy</option>
+                                <option>Medium</option>
+                                <option>Hard</option>
+                            </select>
+                        </div>
+                        <div>
+                            <!-- Topic Selects Here -->
+                             <div id="pythonTopicDiv" class="hidden">
+                                <label for="pythonTopic" class="block text-sm font-medium text-gray-700">Python Topic</label>
+                                <select id="pythonTopic" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 rounded-md">
+                                    <option value="" disabled selected>Select Topic</option>
+                                    <option class="font-bold">Random</option>
+                                    <optgroup label="Basics & Syntax">
+                                        <option>Variables & Data Types</option>
+                                        <option>Operators</option>
+                                        <option>Control Flow (if/else)</option>
+                                        <option>Loops (for/while)</option>
+                                    </optgroup>
+                                    <optgroup label="Functions & Functional">
+                                        <option>Function Definitions</option>
+                                        <option>Lambda Functions</option>
+                                        <option>Map, Filter, Reduce</option>
+                                    </optgroup>
+                                    <optgroup label="Data Structures">
+                                        <option>Lists & List Comprehensions</option>
+                                        <option>Dictionaries & Dict Comprehensions</option>
+                                        <option>Strings & String Methods</option>
+                                    </optgroup>
+                                    <optgroup label="Numpy">
+                                        <option>Array Creation & Attributes</option>
+                                        <option>Indexing & Slicing</option>
+                                        <option>Mathematical Operations</option>
+                                    </optgroup>
+                                    <optgroup label="Pandas">
+                                        <option>Series & DataFrames</option>
+                                        <option>Data Selection (loc, iloc)</option>
+                                        <option>Filtering & Sorting</option>
+                                        <option>Grouping & Aggregation</option>
+                                    </optgroup>
+                                    <optgroup label="Visualization">
+                                        <option>Histograms & Bar Charts</option>
+                                        <option>Scatter & Line Plots</option>
+                                        <option>Pie Charts & Box Plots</option>
+                                    </optgroup>
+                                    <option class="font-bold">Custom</option>
+                                </select>
+                            </div>
+                            <div id="sqlTopicDiv" class="hidden">
+                                <label for="sqlTopic" class="block text-sm font-medium text-gray-700">SQL Topic</label>
+                                <select id="sqlTopic" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 rounded-md">
+                                    <option value="" disabled selected>Select Topic</option>
+                                    <option class="font-bold">Random</option>
+                                    <optgroup label="Basics & Querying">
+                                        <option>SELECT, FROM, WHERE</option>
+                                        <option>Filtering (LIKE, IN, BETWEEN)</option>
+                                    </optgroup>
+                                    <optgroup label="Aggregation & Grouping">
+                                        <option>Aggregate Functions (COUNT, SUM, AVG)</option>
+                                        <option>GROUP BY & HAVING</option>
+                                    </optgroup>
+                                    <optgroup label="Joins & Relationships">
+                                        <option>INNER JOIN</option>
+                                        <option>LEFT/RIGHT JOIN</option>
+                                    </optgroup>
+                                    <optgroup label="Advanced SQL">
+                                        <option>Subqueries</option>
+                                        <option>CTEs (Common Table Expressions)</option>
+                                        <option>Window Functions (ROW_NUMBER, RANK)</option>
+                                    </optgroup>
+                                    <option class="font-bold">Custom</option>
+                                </select>
+                            </div>
+                            <div id="bizdevTopicDiv" class="hidden">
+                                <label for="bizdevTopic" class="block text-sm font-medium text-gray-700">Business Topic</label>
+                                <select id="bizdevTopic" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 rounded-md">
+                                    <option value="" disabled selected>Select Topic</option>
+                                    <option class="font-bold">Random</option>
+                                    <optgroup label="Strategy & Analysis">
+                                        <option>Market Sizing</option>
+                                        <option>Competitor Analysis</option>
+                                        <option>SWOT Analysis</option>
+                                    </optgroup>
+                                     <optgroup label="Finance & Metrics">
+                                        <option>KPI Identification</option>
+                                        <option>Unit Economics</option>
+                                        <option>ROI Analysis</option>
+                                    </optgroup>
+                                    <optgroup label="Operations & Product">
+                                        <option>A/B Testing Scenarios</option>
+                                        <option>Root Cause Analysis</option>
+                                    </optgroup>
+                                    <option class="font-bold">Custom</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="bizdevTypeDiv" class="hidden pt-2">
+                         <label class="block text-sm font-medium text-gray-700">Question Type</label>
+                        <fieldset class="mt-2"><div class="space-y-2 sm:flex sm:items-center sm:space-y-0 sm:space-x-10"><div class="flex items-center"><input id="unseenRadio" name="bizdev-type" type="radio" checked class="h-4 w-4 text-indigo-600 border-gray-300"><label for="unseenRadio" class="ml-3 block text-sm font-medium text-gray-700">Unseen Scenario</label></div><div class="flex items-center"><input id="seenRadio" name="bizdev-type" type="radio" class="h-4 w-4 text-indigo-600 border-gray-300"><label for="seenRadio" class="ml-3 block text-sm font-medium text-gray-700">Seen Passage</label></div></div></fieldset>
+                    </div>
+                    <div id="customTopicDiv" class="hidden pt-2"><label for="customTopic" class="block text-sm font-medium text-gray-700">Enter Custom Topic</label><input type="text" id="customTopic" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm py-2 px-3"></div>
+                </div>
+
+                <!-- Generate Button -->
+                <div id="generateSection" class="hidden text-center mb-6">
+                     <button id="generateQuestionBtn" class="w-full sm:w-auto px-8 py-3 border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400" disabled>Generate Question</button>
+                </div>
+                
+                <div id="questionLoader" class="hidden flex justify-center items-center my-8"><div class="spinner"></div></div>
+
+                <div id="passageSection" class="hidden space-y-4 mb-6">
+                     <div class="bg-blue-50 p-4 rounded-lg border border-blue-200"><h2 class="text-xl font-semibold mb-2 text-blue-800">Reading Passage</h2><div id="passageDisplay" class="prose-custom max-w-none"></div></div>
+                </div>
+
+                <div id="qaSection" class="hidden space-y-6">
+                    <div class="bg-gray-50 p-4 rounded-lg border">
+                        <h2 class="text-xl font-semibold mb-2 text-gray-800">Your Question(s)</h2>
+                        <div id="questionDisplay" class="prose-custom max-w-none"></div>
+                        <div class="mt-4 text-center">
+                            <button id="getHintBtn" class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Get a Hint</button>
+                        </div>
+                        <div id="hintDisplay" class="hidden mt-4 p-3 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-700"></div>
+                    </div>
+                    
+                    <div>
+                        <label id="userAnswerLabel" class="block text-sm font-medium text-gray-700 mb-1">Your Answer</label>
+                        <div id="codeEditor"></div>
+                        <div id="dynamicAnswersContainer" class="hidden space-y-6"></div>
+                        <div id="python-output-console" class="hidden"></div>
+                    </div>
+                    
+                    <div class="flex flex-col sm:flex-row justify-center items-center gap-4">
+                        <button id="runCodeBtn" class="hidden w-full sm:w-auto px-8 py-3 border border-gray-300 text-base font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50">Run Code</button>
+                        <button id="submitAnswer" class="w-full sm:w-auto px-8 py-3 border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">Check My Answer</button>
+                    </div>
+                </div>
+
+                <div id="feedbackLoader" class="hidden flex justify-center items-center my-8"><div class="spinner"></div></div>
+
+                <div id="feedbackSection" class="hidden mt-6 bg-gray-50 p-4 rounded-lg border">
+                    <h2 class="text-xl font-semibold mb-2 text-gray-800">Feedback</h2>
+                    <div id="feedbackDisplay" class="prose-custom max-w-none space-y-2"></div>
+                    <div id="feedbackActions" class="hidden mt-4 flex flex-wrap justify-center gap-4">
+                         <button id="newQuestionBtn" class="w-full sm:w-auto px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">Start New Question</button>
+                         <button id="followUpBtn" class="w-full sm:w-auto px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">Next Challenge</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <!-- Modals -->
+    <div id="confirmationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 h-full w-full hidden z-50 flex items-center justify-center"><div class="relative mx-auto p-5 border w-full max-w-sm shadow-lg rounded-md bg-white"><div class="mt-3 text-center"><h3 class="text-lg font-medium text-gray-900">Are you sure?</h3><div class="mt-2 px-7 py-3"><p class="text-sm text-gray-500">Generating a new question will discard your current progress. Do you want to proceed?</p></div><div class="flex items-center justify-center px-4 py-3 gap-x-2"><button id="cancelBtn" class="px-4 py-2 bg-gray-200 text-base rounded-md w-auto hover:bg-gray-300">Cancel</button><button id="confirmBtn" class="px-4 py-2 bg-red-500 text-white text-base rounded-md w-auto hover:bg-red-600">Yes, Generate</button></div></div></div></div>
+    <div id="hintConfirmationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 h-full w-full hidden z-50 flex items-center justify-center"><div class="relative mx-auto p-5 border w-full max-w-sm shadow-lg rounded-md bg-white"><div class="mt-3 text-center"><h3 class="text-lg font-medium text-gray-900">Get a Hint?</h3><div class="mt-2 px-7 py-3"><p class="text-sm text-gray-500">Are you sure you want a hint?</p></div><div class="flex items-center justify-center px-4 py-3 gap-x-2"><button id="cancelHintBtn" class="px-4 py-2 bg-gray-200 text-base rounded-md w-auto hover:bg-gray-300">Cancel</button><button id="confirmHintBtn" class="px-4 py-2 bg-blue-500 text-white text-base rounded-md w-auto hover:bg-blue-600">Yes, Get Hint</button></div></div></div></div>
+
+    <!-- CodeMirror JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/sql/sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/matchbrackets.min.js"></script>
+    
+    <script>
+        // DOM Elements
+        const apiKeySection = document.getElementById('apiKeySection'), apiKeyInput = document.getElementById('apiKey'), saveApiKeyBtn = document.getElementById('saveApiKey'), apiKeyStatus = document.getElementById('apiKeyStatus'), pyodideStatus = document.getElementById('pyodide-status'), mainContent = document.getElementById('mainContent'), pythonBtn = document.getElementById('pythonBtn'), sqlBtn = document.getElementById('sqlBtn'), bizdevBtn = document.getElementById('bizdevBtn'), optionsSection = document.getElementById('optionsSection'), generateSection = document.getElementById('generateSection'), generateQuestionBtn = document.getElementById('generateQuestionBtn'), difficultySelect = document.getElementById('difficulty'), pythonTopicDiv = document.getElementById('pythonTopicDiv'), sqlTopicDiv = document.getElementById('sqlTopicDiv'), bizdevTopicDiv = document.getElementById('bizdevTopicDiv'), bizdevTypeDiv = document.getElementById('bizdevTypeDiv'), seenRadio = document.getElementById('seenRadio'), customTopicDiv = document.getElementById('customTopicDiv'), customTopicInput = document.getElementById('customTopic'), pythonTopicSelect = document.getElementById('pythonTopic'), sqlTopicSelect = document.getElementById('sqlTopic'), bizdevTopicSelect = document.getElementById('bizdevTopic'), questionLoader = document.getElementById('questionLoader'), passageSection = document.getElementById('passageSection'), passageDisplay = document.getElementById('passageDisplay'), qaSection = document.getElementById('qaSection'), questionDisplay = document.getElementById('questionDisplay'), userAnswerLabel = document.getElementById('userAnswerLabel'), codeEditorDiv = document.getElementById('codeEditor'), dynamicAnswersContainer = document.getElementById('dynamicAnswersContainer'), pythonOutputConsole = document.getElementById('python-output-console'), runCodeBtn = document.getElementById('runCodeBtn'), submitAnswerBtn = document.getElementById('submitAnswer'), feedbackLoader = document.getElementById('feedbackLoader'), feedbackSection = document.getElementById('feedbackSection'), feedbackDisplay = document.getElementById('feedbackDisplay'), confirmationModal = document.getElementById('confirmationModal'), confirmBtn = document.getElementById('confirmBtn'), cancelBtn = document.getElementById('cancelBtn'), hintConfirmationModal = document.getElementById('hintConfirmationModal'), confirmHintBtn = document.getElementById('confirmHintBtn'), cancelHintBtn = document.getElementById('cancelHintBtn'), getHintBtn = document.getElementById('getHintBtn'), hintDisplay = document.getElementById('hintDisplay'), feedbackActions = document.getElementById('feedbackActions'), followUpBtn = document.getElementById('followUpBtn'), newQuestionBtn = document.getElementById('newQuestionBtn');
+
+        // State
+        let apiKey = '', currentLanguage = '', currentQuestion = '', currentPassage = '', codeEditor, pyodide, isPyodideReady = false;
+        const MODEL_NAME = "gemini-2.5-flash-lite";
+
+        // --- Pyodide Initialization ---
+        async function initializePyodide() {
+            pyodideStatus.classList.remove('hidden');
+            pyodideStatus.textContent = 'Loading Python Environment...';
+            try {
+                pyodide = await loadPyodide();
+                isPyodideReady = true;
+                pyodideStatus.textContent = 'Python Environment Ready!';
+                pyodideStatus.className = 'text-xs text-green-600 mt-2';
+                setTimeout(() => pyodideStatus.classList.add('hidden'), 3000);
+            } catch (error) {
+                console.error("Pyodide loading failed:", error);
+                pyodideStatus.textContent = 'Failed to load Python environment.';
+                pyodideStatus.className = 'text-xs text-red-600 mt-2';
+            }
+        }
+
+        // CodeMirror Setup
+        function initializeCodeEditor(mode = 'text/plain') {
+            codeEditorDiv.innerHTML = '';
+            codeEditor = CodeMirror(codeEditorDiv, { lineNumbers: true, mode: mode, theme: 'material-darker', matchBrackets: true, indentUnit: 4, value: '' });
+        }
+
+        // --- API Key Validation ---
+        async function validateApiKey(key) {
+            apiKeyStatus.textContent = 'Validating key...';
+            const validationUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
+            try {
+                const response = await fetch(validationUrl);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error.message || 'Invalid API Key');
+                apiKeyStatus.textContent = 'API Key is valid!';
+                apiKeyStatus.className = 'text-xs text-green-600 mt-2';
+                apiKey = key;
+                apiKeySection.classList.add('hidden');
+                mainContent.classList.remove('hidden');
+            } catch (error) {
+                apiKeyStatus.textContent = `API Key is not valid. Error: ${error.message}`;
+                apiKeyStatus.className = 'text-xs text-red-600 mt-2';
+            }
+        }
+
+        // Event Listeners
+        window.addEventListener('DOMContentLoaded', () => {
+            initializeCodeEditor();
+            initializePyodide();
+        });
+        saveApiKeyBtn.addEventListener('click', () => {
+            const key = apiKeyInput.value.trim();
+            if (key) validateApiKey(key); else alert('Please enter an API key.');
+        });
+        generateQuestionBtn.addEventListener('click', getQuestion);
+        runCodeBtn.addEventListener('click', runPythonCode);
+        submitAnswerBtn.addEventListener('click', validateSolution);
+        getHintBtn.addEventListener('click', () => hintConfirmationModal.classList.remove('hidden'));
+        confirmHintBtn.addEventListener('click', proceedWithHint);
+        cancelHintBtn.addEventListener('click', () => hintConfirmationModal.classList.add('hidden'));
+        followUpBtn.addEventListener('click', getFollowUp);
+        newQuestionBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        confirmBtn.addEventListener('click', () => proceedWithGeneration()); 
+        cancelBtn.addEventListener('click', () => confirmationModal.classList.add('hidden'));
+        [difficultySelect, pythonTopicSelect, sqlTopicSelect, bizdevTopicSelect].forEach(el => el.addEventListener('change', checkEnableGenerate));
+        [pythonTopicSelect, sqlTopicSelect, bizdevTopicSelect].forEach(el => el.addEventListener('change', (e) => handleTopicChange(e)));
+        
+        // API Call
+        async function makeApiCall(prompt) {
+            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+            try {
+                const response = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+                if (!response.ok) { 
+                    const errorData = await response.json();
+                    throw new Error(`API Error: ${response.status} - ${errorData.error.message}`); 
+                }
+                const result = await response.json();
+                return result.candidates[0].content.parts[0].text;
+            } catch (error) { 
+                alert(`An API error occurred: ${error.message}`);
+                [questionLoader, feedbackLoader].forEach(loader => loader.classList.add('hidden'));
+                generateQuestionBtn.disabled = false; generateQuestionBtn.textContent = 'Generate Question';
+                return `An error occurred: ${error.message}.`; 
+            }
+        }
+
+        // Main Logic
+        function selectLanguage(language) {
+            currentLanguage = language;
+            [pythonBtn, sqlBtn, bizdevBtn].forEach(b => b.classList.remove('ring-2', 'ring-offset-2', 'ring-blue-500', 'ring-green-500', 'ring-purple-500'));
+            [pythonTopicDiv, sqlTopicDiv, bizdevTopicDiv, bizdevTypeDiv].forEach(d => d.classList.add('hidden'));
+            runCodeBtn.classList.add('hidden');
+            let mode = 'text/plain';
+            if (language === 'Python') { pythonBtn.classList.add('ring-2', 'ring-offset-2', 'ring-blue-500'); pythonTopicDiv.classList.remove('hidden'); mode = 'python'; runCodeBtn.classList.remove('hidden'); } 
+            else if (language === 'SQL') { sqlBtn.classList.add('ring-2', 'ring-offset-2', 'ring-green-500'); sqlTopicDiv.classList.remove('hidden'); mode = 'sql'; } 
+            else { bizdevBtn.classList.add('ring-2', 'ring-offset-2', 'ring-purple-500'); bizdevTopicDiv.classList.remove('hidden'); bizdevTypeDiv.classList.remove('hidden'); }
+            initializeCodeEditor(mode);
+            [difficultySelect, pythonTopicSelect, sqlTopicSelect, bizdevTopicSelect].forEach(s => s.selectedIndex = 0);
+            optionsSection.classList.remove('hidden'); generateSection.classList.remove('hidden');
+            [customTopicDiv, qaSection, feedbackSection, hintDisplay, passageSection, dynamicAnswersContainer, pythonOutputConsole].forEach(el => el.classList.add('hidden'));
+            codeEditorDiv.classList.remove('hidden');
+            customTopicInput.value = '';
+            checkEnableGenerate();
+        }
+
+        async function getQuestion() {
+            if (!qaSection.classList.contains('hidden') || !passageSection.classList.contains('hidden')) { 
+                confirmationModal.classList.remove('hidden'); return; 
+            }
+            await proceedWithGeneration();
+        }
+        
+        async function proceedWithGeneration(isFollowUp = false, followUpPrompt = '') {
+            confirmationModal.classList.add('hidden');
+            if (!currentLanguage) return;
+            [qaSection, feedbackSection, hintDisplay, passageSection, dynamicAnswersContainer, pythonOutputConsole].forEach(el => el.classList.add('hidden'));
+            codeEditorDiv.classList.remove('hidden');
+            codeEditor.setValue('');
+            questionLoader.classList.remove('hidden');
+            generateQuestionBtn.disabled = true; generateQuestionBtn.textContent = 'Generating...';
+            userAnswerLabel.textContent = "Your Answer";
+            
+            const difficulty = difficultySelect.value;
+            let topic = '';
+            let topicSelect;
+            if (currentLanguage === 'Python') {
+                topicSelect = pythonTopicSelect;
+            } else if (currentLanguage === 'SQL') {
+                topicSelect = sqlTopicSelect;
+            } else { // Business Development
+                topicSelect = bizdevTopicSelect;
+            }
+
+            const selectedOption = topicSelect.options[topicSelect.selectedIndex];
+            const subTopic = selectedOption.value;
+
+            if (subTopic === 'Custom') {
+                topic = customTopicInput.value.trim();
+                if (!topic) {
+                    alert('Please enter a custom topic.');
+                    questionLoader.classList.add('hidden');
+                    generateQuestionBtn.disabled = false;
+                    generateQuestionBtn.textContent = 'Generate Question';
+                    return;
+                }
+            } else if (subTopic !== 'Random') {
+                const parent = selectedOption.parentElement;
+                if (parent && parent.tagName.toUpperCase() === 'OPTGROUP') {
+                    const mainTopic = parent.label;
+                    topic = `${mainTopic}: ${subTopic}`;
+                } else {
+                    topic = subTopic;
+                }
+            }
+            
+            let prompt; currentPassage = '';
+
+            const basePrompt = `You are a question-generation AI for a technical tutor application.
+            **CRITICAL:** Your output must be ONLY the question itself, formatted in simple HTML. Do not wrap your response in markdown code blocks (\`\`\`html). The response must start directly with an HTML tag (e.g., <p>). Do not include any conversational preamble like "Here is your question:".`;
+
+            if (currentLanguage === 'Business Development' && seenRadio.checked && !isFollowUp) {
+                userAnswerLabel.textContent = "Your Answer(s)"; codeEditorDiv.classList.add('hidden'); dynamicAnswersContainer.classList.remove('hidden');
+                prompt = `You are a content generator. Write a business passage of 300-400 words on "${topic}" for an intern. ${basePrompt}`;
+                const passageHtml = await makeApiCall(prompt);
+                currentPassage = passageHtml; passageDisplay.innerHTML = passageHtml; passageSection.classList.remove('hidden');
+                prompt = `Based on the passage below, generate a set of questions (1-2 MCQs, 1-2 short answer, 1 long-form). Crucially, wrap each individual question in its own <div class="question-item"> tag. This is mandatory for the application to parse it. Passage:\n\n${passageHtml}\n\n${basePrompt}`;
+            } else if (isFollowUp) {
+                prompt = followUpPrompt;
+            } else {
+                prompt = `${basePrompt}
+                Request:
+                - Domain: ${currentLanguage}
+                - Difficulty: ${difficulty}`;
+                if (topic) {
+                    prompt += `\n- Topic: "${topic}"`;
+                }
+                if (currentLanguage === 'Python') {
+                    prompt += `\n**Instructions for Python:** The question must include a clear example with sample input and expected output to clarify the requirements.`;
+                }
+                if (currentLanguage === 'SQL') { 
+                    prompt += `\n**Instructions for SQL:** Schemas must be realistic (e.g., E-commerce, Social Media). Include realistic columns/data types. **Crucially, you must also provide small, clear snippets of sample data for the tables and the expected output from the query based on that sample data.**`;
+                }
+            }
+
+            const questionHtml = await makeApiCall(prompt);
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = questionHtml;
+            currentQuestion = tempDiv.textContent || tempDiv.innerText || "";
+            
+            if (currentLanguage === 'Business Development' && seenRadio.checked) {
+                renderDynamicInputs(questionHtml);
+            }
+            
+            questionLoader.classList.add('hidden');
+            questionDisplay.innerHTML = questionHtml; qaSection.classList.remove('hidden');
+            setTimeout(() => codeEditor.refresh(), 10);
+            addCopyButtons(questionDisplay);
+            generateQuestionBtn.textContent = 'Generate Question';
+            checkEnableGenerate();
+        }
+
+        function renderDynamicInputs(questionHtml) {
+            dynamicAnswersContainer.innerHTML = '';
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = questionHtml;
+            const questions = tempDiv.querySelectorAll('.question-item');
+
+            if (questions.length > 0) {
+                questions.forEach((q, index) => {
+                    const questionBlock = document.createElement('div');
+                    
+                    const label = document.createElement('label');
+                    label.className = 'block text-sm font-medium text-gray-700 mb-1';
+                    label.innerHTML = `Answer for Question ${index + 1}`;
+                    const textarea = document.createElement('textarea');
+                    textarea.className = 'block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm';
+                    textarea.rows = 4;
+                    questionBlock.appendChild(label);
+                    questionBlock.appendChild(textarea);
+                    
+                    dynamicAnswersContainer.appendChild(questionBlock);
+                });
+            }
+        }
+        
+        function collectDynamicAnswers() {
+            const answers = [];
+            dynamicAnswersContainer.children.forEach((questionBlock, index) => {
+                const textarea = questionBlock.querySelector('textarea');
+                if (textarea) {
+                    answers.push(`${index + 1}. ${textarea.value}`);
+                }
+            });
+            return answers.join('\n');
+        }
+
+        async function runPythonCode() {
+            if (!isPyodideReady) {
+                alert('Python environment is still loading. Please wait a moment.');
+                return;
+            }
+            const code = codeEditor.getValue();
+            if (!code.trim()) {
+                alert('Please write some Python code to run.');
+                return;
+            }
+            pythonOutputConsole.classList.remove('hidden', 'error');
+            pythonOutputConsole.textContent = 'Running code...';
+            try {
+                pyodide.runPython(`import io, sys; sys.stdout = io.StringIO()`);
+                let result = await pyodide.runPythonAsync(code);
+                let stdout = pyodide.runPython("sys.stdout.getvalue()");
+                let output = stdout;
+                if (result !== undefined) {
+                    output += `\nReturn Value: ${result}`;
+                }
+                pythonOutputConsole.textContent = output || '(No output)';
+            } catch (error) {
+                pythonOutputConsole.textContent = error.toString();
+                pythonOutputConsole.classList.add('error');
+            }
+        }
+
+        async function validateSolution() {
+            let userAnswer = !dynamicAnswersContainer.classList.contains('hidden') ? collectDynamicAnswers() : codeEditor.getValue().trim();
+            if (!userAnswer) { alert('Please enter your answer.'); return; }
+
+            feedbackSection.classList.add('hidden');
+            feedbackLoader.classList.remove('hidden');
+            submitAnswerBtn.disabled = true; submitAnswerBtn.textContent = 'Checking...';
+            
+            let prompt;
+            
+            if (currentLanguage === 'Business Development' && currentPassage) {
+                prompt = `You are an AI business tutor. Given a passage, questions, and the user's answers, provide feedback.
+                PASSAGE: '''${currentPassage}'''
+                QUESTIONS: '''${currentQuestion}'''
+                USER'S ANSWERS: '''${userAnswer}'''`;
+            } else {
+                prompt = `You are an AI code reviewer.
+                The question was: '''${currentQuestion}'''
+                The user submitted: '''${userAnswer}'''`;
+            }
+
+            prompt += `\n**Instructions:**
+            1. Your response MUST begin with: CORRECT, PARTIALLY_CORRECT, or INCORRECT.
+            2. Provide detailed analysis under a <h3>Detailed Analysis</h3> heading.
+            3. If not perfect, provide a correct solution under a <h3>Optimal Solution</h3> heading.
+            4. Format your response using simple HTML.`;
+
+            const feedback = await makeApiCall(prompt);
+            const isCorrect = feedback.trim().startsWith('CORRECT');
+            
+            feedbackLoader.classList.add('hidden');
+            feedbackDisplay.innerHTML = formatFeedback(feedback);
+            feedbackSection.classList.remove('hidden');
+            addCopyButtons(feedbackDisplay);
+            feedbackActions.classList.remove('hidden');
+            followUpBtn.style.display = isCorrect ? 'inline-block' : 'none';
+
+            submitAnswerBtn.disabled = false; submitAnswerBtn.textContent = 'Check My Answer';
+        }
+
+        function formatFeedback(html) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            
+            const correctness = tempDiv.firstChild.textContent.split(' ')[0];
+            tempDiv.firstChild.remove();
+
+            let finalHtml = `<details open><summary class="font-semibold text-lg cursor-pointer">Correctness: <span class="${correctness === 'CORRECT' ? 'text-green-600' : 'text-red-600'}">${correctness}</span></summary><div class="p-2">${tempDiv.innerHTML.split('<h3>')[0]}</div></details>`;
+            
+            const sections = tempDiv.querySelectorAll('h3');
+            sections.forEach(h3 => {
+                let content = '';
+                let sibling = h3.nextSibling;
+                while(sibling && sibling.nodeName !== 'H3') {
+                    content += sibling.outerHTML || sibling.textContent;
+                    sibling = sibling.nextSibling;
+                }
+                finalHtml += `<details><summary class="font-semibold text-lg cursor-pointer">${h3.textContent}</summary><div class="p-2">${content}</div></details>`;
+            });
+
+            return finalHtml;
+        }
+
+        async function proceedWithHint() {
+            hintConfirmationModal.classList.add('hidden');
+            hintDisplay.classList.remove('hidden');
+            hintDisplay.innerHTML = '<div class="spinner mx-auto"></div>';
+            const prompt = `Provide a single, one-sentence hint for this problem:\n'''${currentQuestion}'''`;
+            const hint = await makeApiCall(prompt);
+            hintDisplay.innerHTML = `<p><strong>Hint:</strong> ${hint}</p>`;
+        }
+        
+        async function getFollowUp() {
+            const prompt = `The user correctly answered: '''${currentQuestion}'''\nGenerate a single, new follow-up question that is a logical next step in difficulty for the ${currentLanguage} domain. Output ONLY the question in simple HTML.`;
+            await proceedWithGeneration(true, prompt);
+        }
+
+        // UI & Utility Functions
+        function handleTopicChange(event) {
+            if (event.target.value === 'Custom') {
+                customTopicDiv.classList.remove('hidden');
+            } else {
+                customTopicDiv.classList.add('hidden');
+                customTopicInput.value = '';
+            }
+        }
+
+        function checkEnableGenerate() { 
+            const topic = (currentLanguage === 'Python') ? pythonTopicSelect.value : (currentLanguage === 'SQL') ? sqlTopicSelect.value : bizdevTopicSelect.value; 
+            generateQuestionBtn.disabled = !(difficultySelect.value && topic); 
+        }
+
+        function addCopyButtons(container) {
+            container.querySelectorAll('pre').forEach(pre => {
+                const button = document.createElement('button');
+                button.innerText = 'Copy';
+                button.className = 'absolute top-2 right-2 px-2 py-1 text-xs rounded bg-gray-300 hover:bg-gray-400 text-gray-800';
+                button.onclick = () => navigator.clipboard.writeText(pre.querySelector('code').innerText).then(() => { button.innerText = 'Copied!'; setTimeout(() => { button.innerText = 'Copy'; }, 2000); });
+                pre.appendChild(button);
+            });
+        }
+    </script>
+</body>
+</html>
+
+
