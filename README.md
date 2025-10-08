@@ -1,2 +1,0 @@
-# ai-tutor
-AI Tutor
